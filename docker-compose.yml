@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  ifood-dashboard:
+    build: .
+    container_name: ifood-dashboard
+    ports:
+      - "9000:9000"
+    volumes:
+      # Persiste o banco de dados fora do container
+      - ./data:/app/data
+    environment:
+      - HOST=0.0.0.0
+      - PORT=9000
+    restart: unless-stopped

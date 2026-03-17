@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockFlow | Allury Perfumaria</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --red: #ea1d2c;
+            --red-dark: #b71c1c;
+            --red-light: #fdecea;
+            --gray: #f4f4f4;
+            --border: #ddd;
+            --text: #333;
+            --muted: #666;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: var(--gray); margin: 0; padding: 20px; }
+
+        /* ── AUTH OVERLAY ──────────────────────────────────────── */
+        #auth-overlay {
+            position: fixed; inset: 0;
+            background: linear-gradient(135deg, #ea1d2c 0%, #b71c1c 100%);
+            z-index: 2000;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        .auth-card {
+            background: white; border-radius: 24px;
+            box-shadow: 0 25px 80px rgba(0,0,0,.3);
+            width: 400px; overflow: hidden;
+            animation: slideUp .45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp {
+            from { opacity:0; transform: translateY(24px); }
+            to   { opacity:1; transform: translateY(0); }
+        }
+
+        .auth-header {
+            background: linear-gradient(to right, #ea1d2c, #d31926); 
+            padding: 32px 32px; text-align: center;
+            border-bottom: 4px solid rgba(0,0,0,0.1);
+        }
+        .auth-header h1 {
+            color: white; margin: 0; font-size: 26px; letter-spacing: 1px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .auth-header p {
+            color: rgba(255,255,255,.9); margin: 8px 0 0; font-size: 14px;
+            font-weight: 500;
+        }
+
+        .auth-body { padding: 32px 40px; }
+        .auth-body h2 {
+            color: var(--text); margin: 0 0 24px; font-size: 19px; text-align: center;
+            font-weight: 700;
+        }
+
+        .input-group { margin-bottom: 14px; position: relative; }
+        .input-group label {
+            display: block; font-size: 12px; font-weight: bold;
+            color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .4px;
+        }
+        .input-group input {
+            width: 100%; padding: 11px 14px; border: 1.5px solid var(--border);
+            border-radius: 8px; font-size: 14px; transition: border-color .2s;
+        }
+        .input-group input:focus {
+            outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(234,29,44,.1);
+        }
+        .input-group .toggle-pw {
+            position: absolute; right: 12px; bottom: 11px;
+            cursor: pointer; font-size: 16px; user-select: none;
+        }
+
+        .btn-full {
+            width: 100%; padding: 12px; border: none; border-radius: 8px;
+            font-size: 15px; font-weight: bold; cursor: pointer;
+            background: var(--red); color: white; transition: background .2s;
+        }
+        .btn-full:hover { background: var(--red-dark); }
+        .btn-full:disabled { background: #ccc; cursor: not-allowed; }
+
+        .auth-link {
+            display: block; text-align: center; margin-top: 14px;
+            font-size: 13px; color: var(--red); cursor: pointer;
+            text-decoration: underline;
+        }
+        .auth-back {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 13px; color: var(--muted); cursor: pointer;
+            margin-bottom: 16px; width: fit-content;
+        }
+        .auth-back:hover { color: var(--red); }
+
+        .auth-error {
+            background: #fdecea; border: 1px solid #f5c6cb;
+            color: #c62828; border-radius: 6px; padding: 9px 12px;
+            font-size: 13px; margin-bottom: 14px; display: none;
+        }
+        .auth-success {
+            background: #e8f5e9; border: 1px solid #a5d6a7;
+            color: #2e7d32; border-radius: 6px; padding: 9px 12px;
+            font-size: 13px; margin-bottom: 14px; display: none;
+        }
+
+        /* ── Código de verificação ─── */
+        .code-inputs {
+            display: flex; gap: 8px; justify-content: center; margin: 8px 0 20px;
+        }
+        .code-inputs input {
+            width: 46px; height: 54px; text-align: center; font-size: 24px;
+            font-weight: bold; border: 2px solid var(--border); border-radius: 8px;
+            color: var(--red); transition: border-color .2s;
+        }
+        .code-inputs input:focus {
+            outline: none; border-color: var(--red);
+            box-shadow: 0 0 0 3px rgba(234,29,44,.1);
+        }
+
+        .code-hint {
+            text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 16px;
+        }
+        .code-hint strong { color: var(--text); }
+
+        .resend-link {
+            text-align: center; margin-top: 12px; font-size: 12px; color: var(--muted);
+        }
+        .resend-link a {
+            color: var(--red); cursor: pointer; text-decoration: underline;
+        }
+        #resend-countdown { font-weight: bold; }
+
+        /* ── Password strength ───── */
+        .pw-strength { height: 4px; border-radius: 2px; margin-top: 6px; transition: all .3s; }
+        .pw-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+        /* ── MAIN ──────────────────────────────────────────────── */
+        #main-content { display: none; }
+        .topbar {
+            max-width: 1100px; margin: 0 auto 16px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+        }
+        .topbar h1 { color: var(--red); margin: 0; font-size: 20px; }
+        .topbar .actions { display: flex; gap: 10px; align-items: center; }
+        #logout-btn {
+            background: transparent; border: 2px solid var(--red); color: var(--red);
+            padding: 6px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;
+        }
+        #logout-btn:hover { background: var(--red); color: white; }
+
+        .container { max-width: 1100px; margin: auto; background: white; padding: 24px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,.08); }
+        h2 { color: var(--red); margin-top: 0; }
+        .section { margin-bottom: 30px; border-bottom: 1px solid var(--border); padding-bottom: 24px; }
+        .section:last-child { border-bottom: none; margin-bottom: 0; }
+
+        /* ── Stats ─── */
+        .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+        .stat-card {
+            background: white; padding: 16px; border-radius: 8px;
+            border-left: 5px solid var(--red);
+            box-shadow: 0 2px 5px rgba(0,0,0,.08);
+            flex: 1; min-width: 130px;
+        }
+        .stat-card h3 { margin: 0; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+        .stat-card p { margin: 8px 0 0; font-size: 22px; font-weight: bold; color: var(--text); }
+        .stat-card.warn   { border-left-color: #ffa000; }
+        .stat-card.danger { border-left-color: var(--red); }
+
+        /* ── Tables ─── */
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+        th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; }
+        th { background: #f8f8f8; font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: .4px; }
+        tr:hover { background: #fafafa; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: bold; }
+        .badge-ifood     { background: #fdecea; color: var(--red); }
+        .badge-loja      { background: #e8f5e9; color: #2e7d32; }
+        .badge-whatsapp  { background: #e8f5e9; color: #1b5e20; }
+        .badge-instagram { background: #fce4ec; color: #880e4f; }
+        .stock-low  { color: #f57c00; font-weight: bold; }
+        .stock-zero { color: var(--red);  font-weight: bold; }
+
+        /* ── Forms ─── */
+        form.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+        @media (max-width: 600px) { form.grid { grid-template-columns: 1fr; } }
+        input[type=text], input[type=number], input[type=password], input[type=email], select {
+            padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; width: 100%;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--red); }
+
+        .btn-primary   { background: var(--red);  color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-primary:hover { background: var(--red-dark); }
+        .btn-secondary { background: #555; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-danger    { background: transparent; border: 1px solid var(--red); color: var(--red); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-edit      { background: transparent; border: 1px solid #555; color: #555; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 4px; }
+        .btn-edit:hover    { background: #555; color: white; }
+        .btn-danger:hover  { background: var(--red); color: white; }
+        .span-full { grid-column: 1 / -1; }
+
+        .io-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+        /* ── IA Panel ─── */
+        #ai-panel {
+            position: fixed; right: 20px; bottom: 20px; width: 360px;
+            max-height: 520px; background: white; border-radius: 12px;
+            box-shadow: 0 5px 25px rgba(0,0,0,.2); border-top: 5px solid var(--red);
+            display: flex; flex-direction: column; z-index: 1000; transition: .3s;
+        }
+        #ai-panel.collapsed { height: 56px; overflow: hidden; }
+        .ai-header {
+            padding: 14px 16px; background: #f8f8f8; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border); user-select: none;
+        }
+        .ai-body { padding: 14px; overflow-y: auto; flex-grow: 1; }
+        .ai-issue { margin-bottom: 10px; padding: 10px; border-radius: 6px; font-size: 13px; border-left: 4px solid var(--border); background: #fafafa; }
+        .ai-issue.error      { border-left-color: var(--red); }
+        .ai-issue.warning    { border-left-color: #ffa000; }
+        .ai-issue.suggestion { border-left-color: #1976d2; }
+        .ai-btn-fix { padding: 3px 8px; font-size: 11px; margin-top: 6px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; }
+
+        /* ── Toast ─── */
+        #toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 10px 22px; border-radius: 8px;
+            font-size: 14px; z-index: 3000; opacity: 0; transition: opacity .3s; pointer-events: none;
+        }
+        #toast.show { opacity: 1; }
+
+        /* ── Perfil Modal ─── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.5);
+            z-index: 2500; display: none; justify-content: center; align-items: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: white; padding: 32px; border-radius: 12px;
+            width: 340px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
+        }
+        .modal-box h3 { margin-top: 0; color: var(--red); }
+        .modal-box .input-group { margin-bottom: 12px; }
+        .modal-box .input-group label { font-size: 12px; font-weight: bold; color: var(--muted); display: block; margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     AUTH OVERLAY — Login / Esqueci senha / Verificar / Nova senha
+     ════════════════════════════════════════════════════════════ -->
+<div id="auth-overlay">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>🌸 Allury Perfumaria</h1>
+            <p>StockFlow — Gestão de Estoque</p>
+        </div>
+        <div class="auth-body" id="auth-body">
+            <!-- Renderizado via JS -->
+        </div>
+    </div>
+</div>
+
+<!-- ════ Toast ════ -->
+<div id="toast"></div>
+
+<!-- ════ Modal de Perfil ════ -->
+<div class="modal-overlay" id="profile-modal">
+    <div class="modal-box">
+        <h3>👤 Meu Perfil</h3>
+        <div class="input-group">
+            <label>Nome completo</label>
+            <input type="text" id="prof-name" placeholder="Seu nome">
+        </div>
+        <div class="input-group">
+            <label>E-mail (usado na recuperação de senha)</label>
+            <input type="email" id="prof-email" placeholder="seu@email.com">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:6px">
+            <button class="btn-primary" onclick="saveProfile()" style="flex:1">Salvar</button>
+            <button class="btn-secondary" onclick="closeModal('profile-modal')" style="flex:1">Cancelar</button>
+        </div>
+        <hr style="margin:20px 0;border-color:#eee">
+        <h3 style="color:var(--red);margin-top:0">🔒 Alterar Senha</h3>
+        <div class="input-group">
+            <label>Senha atual</label>
+            <input type="password" id="pwd-current" placeholder="Senha atual">
+        </div>
+        <div class="input-group">
+            <label>Nova senha</label>
+            <input type="password" id="pwd-new" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div class="input-group">
+            <label>Confirmar nova senha</label>
+            <input type="password" id="pwd-confirm" placeholder="Repita a nova senha">
+        </div>
+        <p id="pwd-error" style="color:red;font-size:12px;margin:0 0 10px;display:none"></p>
+        <button class="btn-primary" onclick="changePassword()" style="width:100%">Alterar Senha</button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ════════════════════════════════════════════════════════════ -->
+<div id="main-content">
+
+    <!-- IA Panel -->
+    <div id="ai-panel" class="collapsed">
+        <div class="ai-header" onclick="document.getElementById('ai-panel').classList.toggle('collapsed')">
+            <strong>🤖 Assistente IA</strong>
+            <span id="ai-status">Analisar estoque</span>
+        </div>
+        <div class="ai-body">
+            <button class="btn-primary" onclick="runAIAnalysis()" style="width:100%;margin-bottom:12px">
+                Analisar Estoque Agora
+            </button>
+            <div id="ai-results" style="font-size:13px;color:#555">Clique no botão para iniciar.</div>
+        </div>
+    </div>
+
+    <div class="topbar">
+        <h1>📦 StockFlow</h1>
+        <div class="actions">
+            <span id="username-display" style="font-size:13px;color:#666"></span>
+            <button onclick="openProfileModal()" class="btn-secondary" style="padding:6px 14px;font-size:13px">👤 Perfil</button>
+            <button id="logout-btn" onclick="doLogout()">Sair</button>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-card"><h3>Total em Vendas</h3><p id="stat-total-sales">R$ 0,00</p></div>
+            <div class="stat-card"><h3>Vendas Realizadas</h3><p id="stat-count-sales">0</p></div>
+            <div class="stat-card"><h3>Produtos</h3><p id="stat-count-products">0</p></div>
+            <div class="stat-card warn"><h3>Estoque Crítico</h3><p id="stat-low-stock">0</p></div>
+            <div class="stat-card danger"><h3>Esgotados</h3><p id="stat-out-of-stock">0</p></div>
+        </div>
+
+        <!-- Importar / Exportar -->
+        <div class="section">
+            <h2>Importar / Exportar</h2>
+            <div class="io-bar">
+                <button class="btn-primary"   id="export-products-btn">⬇️ Exportar Produtos (CSV)</button>
+                <button class="btn-primary"   id="export-sales-btn">⬇️ Exportar Vendas (CSV)</button>
+                <button class="btn-secondary" id="import-products-btn">⬆️ Importar Excel/CSV</button>
+                <input type="file" id="import-products-file" accept=".csv,.xls,.xlsx" style="display:none">
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin-top:8px">
+                Aceita <strong>Excel (.xlsx)</strong> ou <strong>CSV</strong> com:
+                <code>Código de Barras, Nome, Preço, Qtd. Atual Estoque</code>
+            </p>
+        </div>
+
+        <!-- Gerenciar Produtos -->
+        <div class="section">
+            <h2>Gerenciar Produtos</h2>
+            <form class="grid" id="product-form">
+                <input type="hidden" id="p-id">
+                <input type="text"   id="p-name"     placeholder="Nome do Produto *" required>
+                <input type="number" step="0.01" id="p-price" placeholder="Preço (R$) *" required min="0.01">
+                <input type="number" id="p-stock"    placeholder="Qtd. em Estoque *" required min="0">
+                <select id="p-category">
+                    <option value="">Categoria (auto)</option>
+                    <option>Perfumes Masculinos</option>
+                    <option>Perfumes Femininos</option>
+                    <option>Perfumes Unissex</option>
+                    <option>Body Splash &amp; Colônias</option>
+                    <option>Kits &amp; Presentes</option>
+                    <option>Hidratantes &amp; Body Care</option>
+                    <option>Maquiagem</option>
+                    <option>Cuidados com o Rosto</option>
+                    <option>Cabelos</option>
+                    <option>Higiene Pessoal</option>
+                    <option>Acessórios</option>
+                    <option>Outros</option>
+                </select>
+                <input type="text" id="p-sku" placeholder="SKU / Código de Barras (EAN)">
+                <div class="span-full" style="display:flex;gap:10px">
+                    <button type="submit" class="btn-primary" id="product-submit-btn">Adicionar Produto</button>
+                    <button type="button" class="btn-secondary" id="product-cancel-btn" style="display:none" onclick="resetProductForm()">Cancelar</button>
+                </div>
+            </form>
+            <input type="text" id="product-search" placeholder="🔍 Buscar por nome ou SKU…"
+                   style="margin-top:16px;max-width:360px;width:100%;padding:10px;border:1px solid var(--border);border-radius:4px">
+            <table id="products-table">
+                <thead>
+                    <tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Categoria</th><th>SKU</th><th>Ações</th></tr>
+                </thead>
+                <tbody id="products-list"></tbody>
+            </table>
+        </div>
+
+        <!-- Registrar Venda -->
+        <div class="section">
+            <h2>Registrar Venda</h2>
+            <form class="grid" id="sale-form">
+                <select id="s-product" required>
+                    <option value="">Selecione um Produto</option>
+                </select>
+                <input type="number" id="s-quantity" placeholder="Quantidade *" required min="1">
+                <select id="s-source">
+                    <option value="ifood">iFood</option>
+                    <option value="loja">Loja Física</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="instagram">Instagram</option>
+                </select>
+                <button type="submit" class="btn-primary">Registrar Venda</button>
+            </form>
+        </div>
+
+        <!-- Histórico de Vendas -->
+        <div class="section">
+            <h2>Histórico de Vendas</h2>
+            <table id="sales-table">
+                <thead>
+                    <tr><th>Produto</th><th>Qtd</th><th>Total</th><th>Canal</th><th>Data</th></tr>
+                </thead>
+                <tbody id="sales-list"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════════════════════ -->
+<script>
+// ── Config ─────────────────────────────────────────────────────
+const API_BASE = window.location.protocol.startsWith("http")
+    ? `${window.location.origin}/api`
+    : "http://localhost:9000/api";
+
+function getToken()   { return localStorage.getItem("session"); }
+function authHeaders(){ return { "Content-Type":"application/json", "Authorization":`Bearer ${getToken()}` }; }
+
+// ── Toast ───────────────────────────────────────────────────────
+function showToast(msg, ms = 3500) {
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), ms);
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  AUTH SCREENS  (home · login · forgot · verify · reset)
+// ─────────────────────────────────────────────────────────────────
+let _resetEmail = "";   // persiste o e-mail entre as telas
+
+function renderAuthHome() {
+    document.getElementById("auth-body").innerHTML = `
+        <h2 style="margin-bottom:24px">O que você deseja acessar? 💼</h2>
+        
+        <div style="display:grid;gap:12px">
+            <button class="btn-full" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--text);border:1.5px solid var(--border);padding:16px" onclick="renderLogin('admin')">
+                <span style="font-size:20px">📊</span>
+                <div style="text-align:left">
+                    <strong style="display:block;font-size:14px">Painel Administrativo</strong>
+                    <span style="font-size:11px;color:var(--muted)">Gestão completa e relatórios</span>
+                </div>
+            </button>
+            
+            <button class="btn-full" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--text);border:1.5px solid var(--border);padding:16px" onclick="renderLogin('pdv')">
+                <span style="font-size:20px">🛒</span>
+                <div style="text-align:left">
+                    <strong style="display:block;font-size:14px">Vendas e PDV</strong>
+                    <span style="font-size:11px;color:var(--muted)">Registro rápido de pedidos</span>
+                </div>
+            </button>
+            
+            <button class="btn-full" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--text);border:1.5px solid var(--border);padding:16px" onclick="renderLogin('estoque')">
+                <span style="font-size:20px">📦</span>
+                <div style="text-align:left">
+                    <strong style="display:block;font-size:14px">Gestão de Estoque</strong>
+                    <span style="font-size:11px;color:var(--muted)">Entrada e saída de produtos</span>
+                </div>
+            </button>
+        </div>
+        
+        <div style="margin-top:24px;border-top:1px solid #eee;padding-top:20px;text-align:center;display:flex;flex-direction:column;gap:10px">
+            <a class="auth-link" style="margin:0;font-weight:bold" onclick="renderForgot()">Recuperar meu acesso 🔐</a>
+            <a class="auth-link" style="margin:0;color:var(--muted)" onclick="renderRegister()">Ainda não tenho conta (Cadastrar)</a>
+        </div>
+    `;
+}
+
+let _targetPortal = 'admin'; // guarda para onde o usuário quer ir
+function renderLogin(portal = 'admin') {
+    _targetPortal = portal;
+    document.getElementById("auth-body").innerHTML = `
+        <div class="auth-back" onclick="renderAuthHome()">← Escolher outro acesso</div>
+        <h2 style="margin-bottom:8px">Acesso ${portal === 'admin' ? 'Painel' : portal === 'pdv' ? 'Vendas' : 'Estoque'}</h2>
+        <p style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:20px">
+            Identifique-se para entrar no portal.
+        </p>
+        
+        <div class="auth-error" id="auth-err"></div>
+        
+        <div class="input-group">
+            <label>Usuário ou E-mail</label>
+            <input type="text" id="li-user" placeholder="admin ou seu@email.com" autocomplete="username">
+        </div>
+        
+        <div class="input-group">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <label>Senha</label>
+                <a class="auth-link" style="margin-top:0;font-size:11px;font-weight:bold" onclick="renderForgot()">Esqueceu a senha?</a>
+            </div>
+            <input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter') doLogin()">
+            <span class="toggle-pw" onclick="togglePw('li-pass',this)">👁️</span>
+        </div>
+        
+        <button class="btn-full" onclick="doLogin()" id="login-btn" style="margin-top:10px">Entrar</button>
+    `;
+    document.getElementById("li-user").focus();
+}
+
+function renderRegister() {
+    document.getElementById("auth-body").innerHTML = `
+        <div class="auth-back" onclick="renderAuthHome()">← Voltar</div>
+        <h2>Criar nova conta 📝</h2>
+        <p style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:20px">
+            Preencha os campos abaixo para se cadastrar.
+        </p>
+
+        <div class="auth-error" id="auth-err"></div>
+
+        <div class="input-group">
+            <label>Nome Completo</label>
+            <input type="text" id="re-name" placeholder="Ex: João Silva">
+        </div>
+
+        <div class="input-group">
+            <label>Usuário</label>
+            <input type="text" id="re-user" placeholder="Nome de usuário">
+        </div>
+
+        <div class="input-group">
+            <label>E-mail</label>
+            <input type="email" id="re-email" placeholder="seu@email.com">
+        </div>
+
+        <div class="input-group">
+            <label>Telefone</label>
+            <input type="text" id="re-phone" placeholder="(00) 00000-0000">
+        </div>
+
+        <div class="input-group">
+            <label>Senha</label>
+            <input type="password" id="re-pass" placeholder="Mínimo 6 caracteres" oninput="checkStrength(this.value)">
+            <span class="toggle-pw" onclick="togglePw('re-pass',this)">👁️</span>
+            <div class="pw-strength" id="pw-bar" style="background:#eee;width:0%"></div>
+            <div class="pw-label" id="pw-label"></div>
+            <p style="font-size:10px;color:var(--muted);margin-top:4px">
+                Deve conter pelo menos 1 letra MAIÚSCULA e 1 minúscula.
+            </p>
+        </div>
+
+        <button class="btn-full" onclick="doRegister()" id="register-btn" style="margin-top:10px">Cadastrar Agora</button>
+        <a class="auth-link" style="margin-top:16px" onclick="renderLogin('admin')">Já tenho conta</a>
+    `;
+    document.getElementById("re-name").focus();
+}
+
+async function doRegister() {
+    const name  = document.getElementById("re-name").value.trim();
+    const user  = document.getElementById("re-user").value.trim();
+    const email = document.getElementById("re-email").value.trim();
+    const phone = document.getElementById("re-phone").value.trim();
+    const pass  = document.getElementById("re-pass").value;
+
+    if (!name || !user || !email || !phone || !pass) {
+        showErr("Por favor, preencha todos os campos.");
+        return;
+    }
+
+    // Validação de senha
+    if (pass.length < 6) { showErr("A senha deve ter no mínimo 6 caracteres."); return; }
+    if (!/[A-Z]/.test(pass)) { showErr("A senha deve ter no mínimo uma letra maiúscula."); return; }
+    if (!/[a-z]/.test(pass)) { showErr("A senha deve ter no mínimo uma letra minúscula."); return; }
+
+    const btn = document.getElementById("register-btn");
+    btn.disabled = true; btn.textContent = "Cadastrando…";
+
+    try {
+        const res = await fetch(`${API_BASE}/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username: user,
+                password: pass,
+                email: email,
+                full_name: name,
+                phone: phone
+            })
+        });
+
+        if (res.ok) {
+            const d = await res.json();
+            localStorage.setItem("session",   d.token);
+            localStorage.setItem("username",  d.username);
+            localStorage.setItem("user_email", d.email || "");
+            checkSession();
+            showToast("✅ Cadastro realizado com sucesso!");
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showErr(err.detail || "Erro ao realizar cadastro.");
+            btn.disabled = false; btn.textContent = "Cadastrar Agora";
+        }
+    } catch {
+        showErr("Servidor indisponível.");
+        btn.disabled = false; btn.textContent = "Cadastrar Agora";
+    }
+}
+
+function renderForgot() {
+    document.getElementById("auth-body").innerHTML = `
+        <div class="auth-back" onclick="renderLogin()">← Voltar ao login</div>
+        <h2>Recuperar senha 🔐</h2>
+        <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px">
+            Informe o e-mail cadastrado na sua conta.<br>
+            Enviaremos um código de 6 dígitos.
+        </p>
+        <div class="auth-error"   id="auth-err"></div>
+        <div class="auth-success" id="auth-ok"></div>
+        <div class="input-group">
+            <label>E-mail</label>
+            <input type="email" id="fg-email" placeholder="seu@email.com"
+                   onkeydown="if(event.key==='Enter') sendForgot()">
+        </div>
+        <button class="btn-full" onclick="sendForgot()" id="forgot-btn">Enviar código</button>
+        <a class="auth-link" onclick="renderLogin()">Voltar ao login</a>
+    `;
+    document.getElementById("fg-email").focus();
+}
+
+function renderVerify() {
+    document.getElementById("auth-body").innerHTML = `
+        <div class="auth-back" onclick="renderForgot()">← Alterar e-mail</div>
+        <h2>Digite o código 📬</h2>
+        <p class="code-hint">
+            Enviamos um código para<br>
+            <strong>${_resetEmail}</strong>
+        </p>
+        <div class="auth-error" id="auth-err"></div>
+        <div class="code-inputs" id="code-boxes">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        </div>
+        <button class="btn-full" onclick="verifyCode()" id="verify-btn">Verificar código</button>
+        <div class="resend-link">
+            Não recebeu? <a onclick="resendCode()">Reenviar</a>
+            <span id="resend-countdown"></span>
+        </div>
+    `;
+    setupCodeInputs();
+    startResendTimer();
+}
+
+function renderNewPassword() {
+    document.getElementById("auth-body").innerHTML = `
+        <h2>Nova senha 🔑</h2>
+        <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px">
+            Crie uma senha forte para sua conta.
+        </p>
+        <div class="auth-error" id="auth-err"></div>
+        <div class="input-group">
+            <label>Nova senha</label>
+            <input type="password" id="np-pass" placeholder="Mínimo 6 caracteres"
+                   oninput="checkStrength(this.value)" autocomplete="new-password">
+            <span class="toggle-pw" onclick="togglePw('np-pass',this)">👁️</span>
+            <div class="pw-strength" id="pw-bar" style="background:#eee;width:0%"></div>
+            <div class="pw-label"  id="pw-label"></div>
+        </div>
+        <div class="input-group">
+            <label>Confirmar nova senha</label>
+            <input type="password" id="np-confirm" placeholder="Repita a senha"
+                   onkeydown="if(event.key==='Enter') doResetPassword()" autocomplete="new-password">
+        </div>
+        <button class="btn-full" onclick="doResetPassword()" id="reset-btn">Salvar nova senha</button>
+    `;
+    document.getElementById("np-pass").focus();
+}
+
+// ── Helpers de UI ───────────────────────────────────────────────
+function togglePw(id, el) {
+    const inp = document.getElementById(id);
+    if (inp.type === "password") { inp.type = "text"; el.textContent = "🙈"; }
+    else                         { inp.type = "password"; el.textContent = "👁️"; }
+}
+
+function showErr(msg) {
+    const e = document.getElementById("auth-err");
+    if (!e) return;
+    e.textContent = msg; e.style.display = "block";
+    setTimeout(() => e.style.display = "none", 6000);
+}
+
+function checkStrength(val) {
+    const bar   = document.getElementById("pw-bar");
+    const label = document.getElementById("pw-label");
+    if (!bar) return;
+    const score = [val.length >= 8, /[A-Z]/.test(val), /[0-9]/.test(val), /[^A-Za-z0-9]/.test(val)].filter(Boolean).length;
+    const levels = [
+        {pct:"0%",  color:"#eee",     txt:""},
+        {pct:"25%", color:"#ef5350",  txt:"Fraca"},
+        {pct:"50%", color:"#ffa726",  txt:"Razoável"},
+        {pct:"75%", color:"#ffee58",  txt:"Boa"},
+        {pct:"100%",color:"#66bb6a",  txt:"Forte"},
+    ];
+    const lv = levels[score] || levels[0];
+    bar.style.width  = lv.pct;
+    bar.style.background = lv.color;
+    label.textContent = lv.txt;
+}
+
+// ── Inputs do código ─────────────────────────────────────────────
+function setupCodeInputs() {
+    const inputs = document.querySelectorAll(".code-inputs input");
+    inputs.forEach((inp, idx) => {
+        inp.addEventListener("input", (e) => {
+            const val = e.target.value.replace(/\D/g, "");
+            e.target.value = val.slice(-1);
+            if (val && idx < inputs.length - 1) inputs[idx + 1].focus();
+            if (getFullCode().length === 6) verifyCode();
+        });
+        inp.addEventListener("keydown", (e) => {
+            if (e.key === "Backspace" && !inp.value && idx > 0) inputs[idx - 1].focus();
+        });
+        inp.addEventListener("paste", (e) => {
+            const text = (e.clipboardData || window.clipboardData).getData("text").replace(/\D/g, "");
+            e.preventDefault();
+            [...text.slice(0,6)].forEach((ch, i) => { if (inputs[i]) inputs[i].value = ch; });
+            if (text.length >= 6) verifyCode();
+        });
+    });
+    inputs[0].focus();
+}
+
+function getFullCode() {
+    return [...document.querySelectorAll(".code-inputs input")].map(i => i.value).join("");
+}
+
+// ── Timer de reenvio ─────────────────────────────────────────────
+let _resendTimer = null;
+function startResendTimer(seconds = 60) {
+    const el = document.getElementById("resend-countdown");
+    if (!el) return;
+    let rem = seconds;
+    el.textContent = ` (${rem}s)`;
+    _resendTimer = setInterval(() => {
+        rem--;
+        if (rem <= 0) { clearInterval(_resendTimer); el.textContent = ""; }
+        else el.textContent = ` (${rem}s)`;
+    }, 1000);
+}
+
+// ── Ações de Auth ────────────────────────────────────────────────
+async function doLogin() {
+    const user = document.getElementById("li-user").value.trim();
+    const pass = document.getElementById("li-pass").value;
+    if (!user || !pass) { showErr("Preencha usuário e senha."); return; }
+
+    const btn = document.getElementById("login-btn");
+    btn.disabled = true; btn.textContent = "Entrando…";
+
+    try {
+        const res = await fetch(`${API_BASE}/login`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({username:user, password:pass})
+        });
+        if (res.ok) {
+            const d = await res.json();
+            localStorage.setItem("session",   d.token);
+            localStorage.setItem("username",  d.username);
+            localStorage.setItem("user_email", d.email || "");
+            checkSession();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showErr(err.detail || "Usuário ou senha incorretos.");
+            btn.disabled = false; btn.textContent = "Entrar";
+        }
+    } catch {
+        showErr("Servidor indisponível. Tente novamente.");
+        btn.disabled = false; btn.textContent = "Entrar";
+    }
+}
+
+async function sendForgot() {
+    const email = document.getElementById("fg-email").value.trim();
+    if (!email) { showErr("Informe seu e-mail."); return; }
+
+    const btn = document.getElementById("forgot-btn");
+    btn.disabled = true; btn.textContent = "Enviando…";
+
+    try {
+        const res = await fetch(`${API_BASE}/forgot-password`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({email})
+        });
+        const d = await res.json();
+
+        if (res.status === 429) { showErr(d.detail); btn.disabled = false; btn.textContent = "Enviar código"; return; }
+
+        _resetEmail = email;
+        renderVerify();
+    } catch {
+        showErr("Erro ao enviar. Tente novamente.");
+        btn.disabled = false; btn.textContent = "Enviar código";
+    }
+}
+
+async function resendCode() {
+    if (_resendTimer) clearInterval(_resendTimer);
+    await sendForgot();
+}
+
+async function verifyCode() {
+    const code = getFullCode();
+    if (code.length < 6) { showErr("Digite todos os 6 dígitos."); return; }
+
+    const btn = document.getElementById("verify-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Verificando…"; }
+
+    try {
+        const res = await fetch(`${API_BASE}/verify-reset-code`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({email: _resetEmail, code})
+        });
+        const d = await res.json();
+
+        if (res.ok) {
+            renderNewPassword();
+        } else {
+            showErr(d.detail || "Código incorreto.");
+            if (btn) { btn.disabled = false; btn.textContent = "Verificar código"; }
+        }
+    } catch {
+        showErr("Erro de conexão.");
+        if (btn) { btn.disabled = false; btn.textContent = "Verificar código"; }
+    }
+}
+
+async function doResetPassword() {
+    const pass    = document.getElementById("np-pass").value;
+    const confirm = document.getElementById("np-confirm").value;
+    const code    = _lastCode || "";
+
+    if (pass.length < 6)    { showErr("A senha deve ter ao menos 6 caracteres."); return; }
+    if (pass !== confirm)   { showErr("As senhas não coincidem."); return; }
+
+    // Para enviar ao backend precisamos do código — guardamos na verificação
+    const btn = document.getElementById("reset-btn");
+    btn.disabled = true; btn.textContent = "Salvando…";
+
+    try {
+        const res = await fetch(`${API_BASE}/reset-password`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({email: _resetEmail, code: _lastCode, new_password: pass})
+        });
+        const d = await res.json();
+
+        if (res.ok) {
+            renderLogin();
+            showToast("✅ Senha redefinida! Faça login com a nova senha.");
+        } else {
+            showErr(d.detail || "Erro ao redefinir senha.");
+            btn.disabled = false; btn.textContent = "Salvar nova senha";
+        }
+    } catch {
+        showErr("Erro de conexão.");
+        btn.disabled = false; btn.textContent = "Salvar nova senha";
+    }
+}
+
+// Guarda o código verificado para reuso na tela de nova senha
+let _lastCode = "";
+const _origVerify = verifyCode;
+// Patch para capturar o code antes de ir pra próxima tela
+window.verifyCode = async function() {
+    _lastCode = getFullCode();
+    await _origVerify();
+};
+
+// ── Sessão ───────────────────────────────────────────────────────
+function checkSession() {
+    if (getToken()) {
+        document.getElementById("auth-overlay").style.display = "none";
+        document.getElementById("main-content").style.display = "block";
+        const uname = localStorage.getItem("username") || "";
+        document.getElementById("username-display").textContent = uname ? `👤 ${uname}` : "";
+        fetchData();
+    }
+}
+
+async function doLogout() {
+    try {
+        await fetch(`${API_BASE}/logout`, {method:"POST", headers: authHeaders()});
+    } catch {}
+    localStorage.removeItem("session");
+    localStorage.removeItem("username");
+    localStorage.removeItem("user_email");
+    location.reload();
+}
+
+// ── Perfil ───────────────────────────────────────────────────────
+async function openProfileModal() {
+    try {
+        const res = await fetch(`${API_BASE}/me`, {headers: authHeaders()});
+        const d = await res.json();
+        document.getElementById("prof-name").value  = d.full_name || "";
+        document.getElementById("prof-email").value = d.email     || "";
+    } catch {}
+    document.getElementById("pwd-current").value = "";
+    document.getElementById("pwd-new").value     = "";
+    document.getElementById("pwd-confirm").value = "";
+    document.getElementById("pwd-error").style.display = "none";
+    document.getElementById("profile-modal").classList.add("open");
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove("open");
+}
+
+async function saveProfile() {
+    const res = await fetch(`${API_BASE}/me`, {
+        method:"PUT", headers: authHeaders(),
+        body: JSON.stringify({
+            full_name: document.getElementById("prof-name").value,
+            email:     document.getElementById("prof-email").value
+        })
+    });
+    if (res.ok) {
+        closeModal("profile-modal");
+        showToast("✅ Perfil atualizado!");
+    }
+}
+
+async function changePassword() {
+    const curr    = document.getElementById("pwd-current").value;
+    const newPwd  = document.getElementById("pwd-new").value;
+    const confirm = document.getElementById("pwd-confirm").value;
+    const errEl   = document.getElementById("pwd-error");
+    errEl.style.display = "none";
+
+    if (!curr || !newPwd) { errEl.textContent = "Preencha todos os campos."; errEl.style.display = "block"; return; }
+    if (newPwd !== confirm) { errEl.textContent = "As senhas não coincidem."; errEl.style.display = "block"; return; }
+    if (newPwd.length < 6) { errEl.textContent = "A senha deve ter ao menos 6 caracteres."; errEl.style.display = "block"; return; }
+
+    const res = await fetch(`${API_BASE}/change-password`, {
+        method:"POST", headers: authHeaders(),
+        body: JSON.stringify({current_password: curr, new_password: newPwd})
+    });
+    if (res.ok) {
+        closeModal("profile-modal");
+        showToast("✅ Senha alterada com sucesso!");
+    } else {
+        const err = await res.json().catch(() => ({}));
+        errEl.textContent = err.detail || "Erro.";
+        errEl.style.display = "block";
+    }
+}
+
+// ── Dados ────────────────────────────────────────────────────────
+let _allProducts = [];
+
+async function fetchData() {
+    await Promise.all([loadStats(), loadProducts(), loadSales()]);
+}
+
+async function loadStats() {
+    try {
+        const res = await fetch(`${API_BASE}/stats`, {headers: authHeaders()});
+        if (!res.ok) return;
+        const d = await res.json();
+        document.getElementById("stat-total-sales").textContent    = `R$ ${d.total_sales.toFixed(2).replace(".",",")}`;
+        document.getElementById("stat-count-sales").textContent    = d.count_sales;
+        document.getElementById("stat-count-products").textContent = d.count_products;
+        document.getElementById("stat-low-stock").textContent      = d.low_stock;
+        document.getElementById("stat-out-of-stock").textContent   = d.out_of_stock;
+    } catch {}
+}
+
+async function loadProducts() {
+    const res = await fetch(`${API_BASE}/products`, {headers: authHeaders()});
+    if (!res.ok) { if (res.status === 401) doLogout(); return; }
+    _allProducts = await res.json();
+    renderProducts(_allProducts);
+    const sel = document.getElementById("s-product");
+    sel.innerHTML = '<option value="">Selecione um Produto</option>';
+    _allProducts.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        const label = p.stock_quantity === 0 ? " ⚠️ Esgotado"
+                    : p.stock_quantity <= 3   ? ` (${p.stock_quantity} restantes)`
+                    : ` (${p.stock_quantity})`;
+        opt.textContent = p.name + label;
+        if (p.stock_quantity === 0) opt.disabled = true;
+        sel.appendChild(opt);
+    });
+}
+
+function renderProducts(list) {
+    const tbody = document.getElementById("products-list");
+    tbody.innerHTML = "";
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Nenhum produto cadastrado.</td></tr>';
+        return;
+    }
+    list.forEach(p => {
+        const sc = p.stock_quantity === 0 ? "stock-zero" : p.stock_quantity <= 3 ? "stock-low" : "";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${esc(p.name)}</td>
+            <td>R$ ${p.price.toFixed(2).replace(".",",")}</td>
+            <td class="${sc}">${p.stock_quantity}</td>
+            <td>${esc(p.category||"—")}</td>
+            <td style="font-size:12px;color:#888">${esc(p.sku||"—")}</td>
+            <td>
+                <button class="btn-edit"   onclick='editProduct(${JSON.stringify(p).replace(/'/g,"&#39;")})'>✏️</button>
+                <button class="btn-danger" onclick="deleteProduct(${p.id},'${esc(p.name)}')">🗑️</button>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+document.getElementById("product-search").addEventListener("input", function() {
+    const q = this.value.toLowerCase();
+    renderProducts(!q ? _allProducts : _allProducts.filter(p =>
+        p.name.toLowerCase().includes(q) || (p.sku||"").toLowerCase().includes(q)
+    ));
+});
+
+async function loadSales() {
+    const res = await fetch(`${API_BASE}/sales`, {headers: authHeaders()});
+    if (!res.ok) return;
+    const sales = await res.json();
+    const tbody = document.getElementById("sales-list");
+    tbody.innerHTML = "";
+    if (!sales.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px">Nenhuma venda registrada.</td></tr>';
+        return;
+    }
+    sales.forEach(s => {
+        const date = new Date(s.sale_date * 1000).toLocaleString("pt-BR");
+        const src  = s.source;
+        const badge = `<span class="badge badge-${src}">${esc(src)}</span>`;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${esc(s.product_name)}</td>
+            <td>${s.quantity}</td>
+            <td>R$ ${s.total_price.toFixed(2).replace(".",",")}</td>
+            <td>${badge}</td>
+            <td style="font-size:12px">${date}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ── CRUD ─────────────────────────────────────────────────────────
+document.getElementById("product-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const pid = document.getElementById("p-id").value;
+    const body = {
+        name:           document.getElementById("p-name").value.trim(),
+        price:          parseFloat(document.getElementById("p-price").value),
+        stock_quantity: parseInt(document.getElementById("p-stock").value),
+        category:       document.getElementById("p-category").value || null,
+        sku:            document.getElementById("p-sku").value.trim() || null
+    };
+    const res = await fetch(pid ? `${API_BASE}/products/${pid}` : `${API_BASE}/products`, {
+        method: pid ? "PUT" : "POST", headers: authHeaders(), body: JSON.stringify(body)
+    });
+    if (res.ok) {
+        resetProductForm(); await fetchData();
+        showToast(pid ? "✅ Produto atualizado!" : "✅ Produto adicionado!");
+    } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Erro: ${err.detail || "Tente novamente."}`);
+    }
+};
+
+function editProduct(p) {
+    document.getElementById("p-id").value = p.id;
+    document.getElementById("p-name").value  = p.name;
+    document.getElementById("p-price").value = p.price;
+    document.getElementById("p-stock").value = p.stock_quantity;
+    document.getElementById("p-category").value = p.category || "";
+    document.getElementById("p-sku").value = p.sku || "";
+    document.getElementById("product-submit-btn").textContent = "Atualizar Produto";
+    document.getElementById("product-cancel-btn").style.display = "inline-block";
+    document.getElementById("p-name").scrollIntoView({behavior:"smooth", block:"center"});
+}
+
+function resetProductForm() {
+    document.getElementById("product-form").reset();
+    document.getElementById("p-id").value = "";
+    document.getElementById("product-submit-btn").textContent = "Adicionar Produto";
+    document.getElementById("product-cancel-btn").style.display = "none";
+}
+
+async function deleteProduct(id, name) {
+    if (!confirm(`Remover "${name}"? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch(`${API_BASE}/products/${id}`, {method:"DELETE", headers: authHeaders()});
+    if (res.ok) { await fetchData(); showToast("🗑️ Produto removido."); }
+    else { const err = await res.json().catch(() => ({})); alert(`Erro: ${err.detail}`); }
+}
+
+document.getElementById("sale-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = {
+        product_id: parseInt(document.getElementById("s-product").value),
+        quantity:   parseInt(document.getElementById("s-quantity").value),
+        source:     document.getElementById("s-source").value
+    };
+    const res = await fetch(`${API_BASE}/sales`, {method:"POST", headers: authHeaders(), body: JSON.stringify(body)});
+    if (res.ok) {
+        const d = await res.json();
+        e.target.reset(); await fetchData();
+        showToast(`✅ Venda registrada! Total: R$ ${d.total_price.toFixed(2).replace(".",",")}`);
+    } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Erro: ${err.detail || "Tente novamente."}`);
+    }
+};
+
+// ── Importar / Exportar ───────────────────────────────────────────
+function downloadCSV(fn, csv) {
+    const blob = new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8;"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.setAttribute("download", fn);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function escCSV(v) {
+    if (v == null) return "";
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+async function exportProductsCSV() {
+    const r = await fetch(`${API_BASE}/products`, {headers: authHeaders()});
+    const ps = await r.json();
+    const lines = [["name","price","stock_quantity","category","sku"].join(",")];
+    ps.forEach(p => lines.push([p.name,p.price,p.stock_quantity,p.category,p.sku].map(escCSV).join(",")));
+    downloadCSV("produtos.csv", lines.join("\n"));
+}
+async function exportSalesCSV() {
+    const r = await fetch(`${API_BASE}/sales`, {headers: authHeaders()});
+    const ss = await r.json();
+    const lines = [["product_name","quantity","total_price","source","sale_date"].join(",")];
+    ss.forEach(s => {
+        const dt = new Date(s.sale_date*1000).toLocaleString("pt-BR");
+        lines.push([s.product_name,s.quantity,s.total_price,s.source,dt].map(escCSV).join(","));
+    });
+    downloadCSV("vendas.csv", lines.join("\n"));
+}
+function parseCSV(text) {
+    const rows=[]; let cur="", inQ=false;
+    const push=()=>{ rows[rows.length-1].push(cur); cur=""; };
+    rows.push([]);
+    for(let i=0;i<text.length;i++){
+        const ch=text[i], nx=text[i+1];
+        if(inQ){ if(ch==='"'){ if(nx==='"'){cur+='"';i++;}else inQ=false; }else cur+=ch; }
+        else {
+            if(ch==='"') inQ=true;
+            else if(ch===',') push();
+            else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&nx==='\n')i++; push(); rows.push([]); }
+            else cur+=ch;
+        }
+    }
+    push();
+    if(rows.length && rows[rows.length-1].every(c=>c==="")) rows.pop();
+    return rows;
+}
+async function importProductsFromFile(file) {
+    const fn = file.name.toLowerCase(); let rows=[];
+    try {
+        if(fn.endsWith(".csv")) rows=parseCSV(await file.text());
+        else { const d=await file.arrayBuffer(); const wb=XLSX.read(d); rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1}); }
+    } catch(e){ alert("Erro ao ler o arquivo: "+e.message); return; }
+    if(!rows.length){ alert("Arquivo vazio."); return; }
+    let hi=-1, col={sku:-1,name:-1,price:-1,stock:-1};
+    for(let i=0;i<Math.min(rows.length,10);i++){
+        const row=rows[i].map(h=>String(h||"").trim());
+        col.sku=row.indexOf("Código de Barras"); col.name=row.indexOf("Nome");
+        col.price=row.indexOf("Preço"); col.stock=row.indexOf("Qtd. Atual Estoque");
+        if(col.name!==-1&&col.price!==-1){ hi=i; break; }
+    }
+    if(hi===-1){ alert('Cabeçalhos não encontrados! Necessário: "Nome" e "Preço".'); return; }
+    let ok=0; const fail=[];
+    for(let i=hi+1;i<rows.length;i++){
+        const row=rows[i];
+        if(!row||!row.some(c=>String(c||"").trim())) continue;
+        let rp=String(row[col.price]||"0").trim();
+        let cp=rp.replace(/R\$/g,"").replace(/\s/g,"");
+        if(cp.includes(",")&&cp.includes(".")) cp=cp.replace(/\./g,"").replace(",",".");
+        else if(cp.includes(",")) cp=cp.replace(",",".");
+        const prod={name:String(row[col.name]||"").trim(), price:parseFloat(cp)||0,
+                    stock_quantity:parseInt(row[col.stock]||0,10)||0, category:"Geral",
+                    sku: col.sku!==-1 ? String(row[col.sku]||"").trim()||null : null};
+        if(!prod.name) continue;
+        try {
+            const r=await fetch(`${API_BASE}/products`,{method:"POST",headers:authHeaders(),body:JSON.stringify(prod)});
+            if(!r.ok){ const e=await r.json().catch(()=>({})); fail.push({row:i+1,item:prod.name,error:e.detail||r.statusText}); }
+            else ok++;
+        } catch(e){ fail.push({row:i+1,item:prod.name,error:e.message}); }
+    }
+    await fetchData();
+    if(fail.length){
+        let msg=`Importação:\n✅ ${ok} adicionados\n❌ ${fail.length} falhas.`;
+        if(fail.length<=5) msg+="\n\n"+fail.map(f=>`- ${f.item}: ${f.error}`).join("\n");
+        alert(msg);
+    } else showToast(`✅ ${ok} produtos importados!`);
+}
+document.getElementById("export-products-btn").onclick = exportProductsCSV;
+document.getElementById("export-sales-btn").onclick    = exportSalesCSV;
+document.getElementById("import-products-btn").onclick = ()=>document.getElementById("import-products-file").click();
+document.getElementById("import-products-file").onchange = (e)=>{
+    const f=e.target.files[0]; if(!f) return;
+    importProductsFromFile(f); e.target.value="";
+};
+
+// ── IA ────────────────────────────────────────────────────────────
+async function applyAIFix(issue) {
+    const r = await fetch(`${API_BASE}/products`, {headers: authHeaders()});
+    const ps = await r.json();
+    const p = ps.find(x => x.id === issue.id);
+    if (!p) return;
+    if (issue.suggested_cat) p.category = issue.suggested_cat;
+    await fetch(`${API_BASE}/products/${issue.id}`, {method:"PUT", headers: authHeaders(), body: JSON.stringify(p)});
+    runAIAnalysis(); loadProducts();
+}
+async function runAIAnalysis() {
+    const st = document.getElementById("ai-status");
+    const rs = document.getElementById("ai-results");
+    st.textContent = "Analisando…";
+    rs.innerHTML   = '<p style="color:#888">Aguarde…</p>';
+    try {
+        const r = await fetch(`${API_BASE}/ai/analyze`, {headers: authHeaders()});
+        const d = await r.json();
+        st.textContent = `${d.issues.length} alerta(s)`;
+        rs.innerHTML   = `<p style="color:#444;margin-top:0">${d.summary}</p>`;
+        d.issues.forEach(issue => {
+            const div = document.createElement("div");
+            div.className = `ai-issue ${issue.type}`;
+            div.innerHTML = `
+                <strong>${esc(issue.item)}</strong><br>${esc(issue.issue)}<br>
+                <button class="ai-btn-fix" onclick='applyAIFix(${JSON.stringify(issue)})'>✅ ${esc(issue.fix)}</button>`;
+            rs.appendChild(div);
+        });
+    } catch { st.textContent = "Erro na análise"; }
+}
+
+// ── Util ──────────────────────────────────────────────────────────
+function esc(s) {
+    return String(s||"")
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+renderAuthHome();
+checkSession();
+</script>
+</body>
+</html>

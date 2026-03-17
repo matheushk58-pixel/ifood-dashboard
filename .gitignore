@@ -1,0 +1,23 @@
+# Banco de dados (NÃO subir para o git — contém dados reais)
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# IDEs
+.vscode/
+.idea/
